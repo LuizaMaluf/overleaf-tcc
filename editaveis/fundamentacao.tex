@@ -2,32 +2,198 @@
 \chapter{Fundamentação teórica}
 \label{chap:fundamentacao}
 
-% Abertura do capítulo: um parágrafo dizendo o que ele apresenta.
+Este capítulo reúne os conceitos em que o trabalho se apoia: integração de
+dados e \emph{schema matching}, perfilamento de dados, transformações para
+junção, modelos de linguagem como componentes de sistemas,
+\emph{Spec-Driven Development} e o contexto dos dados abertos governamentais
+no Brasil. Termina com o artigo-base, o SPAPI-Tester, e o que este trabalho
+adota dele.
 
-\section{Integração de dados e schema matching}
+\section{Integração de dados e \emph{schema matching}}
 \label{sec:fundamentacao-integracao-de-dados-e-schema-matching}
-% Lenzerini (2002); Doan, Halevy e Ives (2012); Rahm e Bernstein (2001).
 
-\section{Perfilamento de dados e evidências de compatibilidade}
+Integrar dados é combinar fontes distintas e oferecer ao usuário uma visão
+unificada delas \cite{lenzerini2002integration}. O problema aparece sempre que
+as fontes foram construídas de forma independente: elas usam nomes, tipos,
+formatos e códigos diferentes para o mesmo conceito, e raramente declaram uma
+chave comum \cite{doan2012principles}.
+
+Uma das etapas da integração é o \emph{schema matching}: encontrar quais
+atributos de dois esquemas correspondem entre si. \citeonline{rahm2001survey}
+classificam as abordagens pelo tipo de informação que usam: o esquema (nomes,
+tipos, restrições) ou as instâncias (os valores). O COMA \cite{do2002coma}
+combina vários \emph{matchers} desses tipos, e o Valentine
+\cite{koutras2021valentine} compara métodos clássicos num benchmark de
+descoberta de conjuntos de dados, gerando pares de tabelas por perturbação.
+
+A saída de um \emph{matcher} é uma \emph{correspondência}: a coluna $a$ de
+$A$ corresponde à coluna $b$ de $B$. Este trabalho trata de um problema mais
+estreito e mais exigente, a \emph{junção sob transformações verificáveis}. A
+resposta precisa dizer quais colunas formam a chave, como transformar cada
+lado para que os valores coincidam e qual cardinalidade se espera da junção.
+
+Usamos os seguintes termos ao longo do texto:
+
+\begin{description}
+\item[Chave de integração] colunas de $A$, colunas de $B$ e a transformação
+de cada lado que permitem unir as duas tabelas. Pode ser composta (várias
+colunas) ou derivada (reconstruída por transformação, como a concatenação de
+partes de um identificador).
+\item[Atrito] diferença entre duas colunas que se referem à mesma entidade e
+que impede a junção direta. Os tipos usados neste trabalho estão na
+Tabela~\ref{tab:atritos}.
+\item[Abstenção] resposta que declara não haver chave de integração entre as
+duas tabelas. É uma resposta, não uma falha.
+\end{description}
+
+\begin{table}[htbp]
+\centering
+\caption{Tipos de atrito considerados, com exemplos do domínio orçamentário
+federal}
+\label{tab:atritos}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Atrito} & \textbf{Exemplo} \\
+\midrule
+Grafia ou nomenclatura & \texttt{nr\_empenho} $\times$ \texttt{num\_empenho}; nome de parlamentar com e sem acento \\
+Formato ou tipo & nota de empenho curta (\texttt{2023NE000123}) $\times$ identificador SIAFI completo; CNPJ com e sem máscara; texto $\times$ inteiro \\
+Equivalência de código & a mesma unidade sob duas siglas; \texttt{S}/\texttt{N} $\times$ booleano \\
+Chave derivada & UG + gestão + número da NE $\rightarrow$ identificador SIAFI \\
+Extração de texto livre & número da transferência escrito na descrição da nota de empenho \\
+Estrutura aninhada & identificador dentro de um JSON bruto \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Perfilamento de dados}
 \label{sec:fundamentacao-perfilamento-de-dados-e-evidencias-de-compatibilidade}
-% Abedjan, Golab e Naumann (2015).
 
-\section{Modelos de linguagem}
+Perfilar dados é calcular metadados sobre uma coluna ou tabela: tipo,
+cardinalidade, unicidade, nulos, distribuição de valores, padrões e
+dependências \cite{abedjan2015profiling}. Para a descoberta de chaves, o
+perfil importa porque muitos atritos só aparecem nos valores. Uma máscara de
+CNPJ, um identificador embutido num texto ou um código com zeros à esquerda
+não são visíveis pelo nome da coluna. Por isso, o sistema proposto perfila
+todas as colunas das duas tabelas antes de qualquer decisão, e não apenas as
+de nome parecido.
+
+\section{Transformações para junção}
+\label{sec:fundamentacao-transformacoes-para-juncao}
+
+Quando a chave existe mas os valores não coincidem, é preciso uma
+transformação. A síntese de programas por exemplos resolve parte disso: o
+FlashFill \cite{gulwani2011flashfill} e o Transform-Data-by-Example
+\cite{he2018tde} aprendem transformações de texto a partir de pares de
+entrada e saída. Um par novo de tabelas, porém, não vem com exemplos. O
+Auto-Join \cite{zhu2017autojoin} dispensa exemplos e busca transformações
+sintáticas que tornem duas tabelas unificáveis.
+
+Duas classes de atrito ficam fora do alcance dessas buscas sintáticas:
+equivalências de código, em que dois valores diferentes significam a mesma
+coisa, e identificadores escritos em texto livre irregular. Reconhecê-las
+exige conhecimento de domínio, que é o que um modelo de linguagem pode
+oferecer.
+
+\section{Modelos de linguagem como componentes de sistemas}
 \label{sec:fundamentacao-modelos-de-linguagem}
-% Saída estruturada, DSPy, cadeia de raciocínio (Khattab et al., 2024; Wei et al., 2022).
 
-\section{Arquitetura de dados}
-\label{sec:fundamentacao-arquitetura-de-dados}
-% Camadas bronze, silver e gold; orquestração orientada a dados (Armbrust et al., 2021; Reis e Housley, 2022).
+Modelos de fundação conseguem executar tarefas de preparação de dados com
+pouco treinamento específico \cite{narayan2022wrangle}, e o \emph{schema
+matching} com LLMs já foi estudado experimentalmente
+\cite{parciak2024schema}. A questão deste trabalho não é se o LLM acerta uma
+tarefa isolada, mas como ele se encaixa num sistema que precisa ser
+confiável.
 
-\section{Spec-Driven Development e agentes de IA de código}
+Sistemas que combinam modelos com outros componentes são chamados de
+\emph{sistemas compostos de IA}. Quando o LLM é um desses componentes, é
+comum não estar claro o que ele pode decidir e como a sua saída é verificada
+\cite{shao2025integration}. Arquiteturas de referência para agentes baseados
+em modelos de fundação recomendam salvaguardas explícitas
+\cite{lu2024refarch}, e a decomposição da tarefa em etapas, com o modelo
+apenas onde ele é necessário, é um padrão de projeto descrito para sistemas
+com LLM \cite{marquez2025patterns}.
+
+O DSPy \cite{khattab2024dspy} oferece um modo de programar chamadas a LLMs
+com assinaturas tipadas: o desenvolvedor declara as entradas e o esquema da
+saída, e o arcabouço valida a resposta e pode repetir a chamada quando a
+validação falha. É o mecanismo usado no estágio de decisão do sistema
+proposto.
+
+\section{\emph{Spec-Driven Development} e agentes de IA de código}
 \label{sec:fundamentacao-spec-driven-development-e-agentes-de-ia-de-codigo}
-% Böckeler (2025); GitHub Spec Kit; Meyer (1992); Adzic (2011). Literatura acadêmica ainda escassa: buscar ICSE, FSE, arXiv.
+
+Agentes de IA de código recebem uma tarefa em linguagem natural e alteram um
+repositório até cumpri-la. No \emph{Spec-Driven Development} (SDD), a tarefa
+chega como uma especificação escrita antes do código, com o problema, o
+escopo, o contrato e critérios de aceite verificáveis
+\cite{bockeler2025sdd}. O Spec Kit, do GitHub \cite{speckit}, organiza o
+trabalho do agente em quatro fases: especificar (\emph{specify}), planejar
+(\emph{plan}), dividir em tarefas (\emph{tasks}) e implementar
+(\emph{implement}).
+
+A literatura acadêmica sobre SDD ainda é pequena. Praticantes relatam um
+comportamento mais previsível do agente, à custa de mais tempo de
+planejamento e revisão \cite{agarwal2026sdd}, e ancorar as etapas do SDD em
+evidências do repositório trouxe um ganho pequeno na qualidade avaliada por
+um LLM \cite{taghavi2026speckitagents}. Para medir o trabalho de agentes de
+forma independente, o SWE-bench \cite{jimenez2024swebench} usa testes que o
+agente não vê. Este trabalho usa a mesma ideia, os \emph{testes-oráculo},
+para comparar o agente com e sem especificação.
+
+As decisões de arquitetura do sistema são registradas em ADRs
+(\emph{Architecture Decision Records}) \cite{nygard2011adr}: documentos curtos
+com o contexto, a decisão, as alternativas rejeitadas e as consequências.
 
 \section{Dados abertos governamentais no Brasil}
 \label{sec:fundamentacao-dados-abertos-governamentais-no-brasil}
-% LAI, Decreto 8.777/2016, Lei 14.129/2021, LGPD.
+
+A Lei de Acesso à Informação \cite{lai2011} e a Política de Dados Abertos do
+Poder Executivo federal \cite{decreto8777} tornam pública a maior parte dos
+dados usados neste trabalho. O Decreto n.º 10.046/2019 \cite{decreto10046}
+trata do compartilhamento de dados entre órgãos, e a Lei do Governo Digital
+\cite{lei14129} estabelece a interoperabilidade como princípio. A Lei Geral
+de Proteção de Dados \cite{lgpd2018} limita o uso de dados pessoais: por isso,
+pares cuja chave é o CPF ficam fora do benchmark, e o repositório do trabalho
+versiona apenas gabaritos, nunca dados.
+
+O Quadro Europeu de Interoperabilidade \cite{eif2017} distingue quatro
+camadas de interoperabilidade: legal, organizacional, semântica e técnica.
+Este trabalho atua na camada semântica, sem alterar os sistemas de origem.
 
 \section{Artigo-base: SPAPI-Tester}
 \label{sec:fundamentacao-artigo-base-spapi-tester}
-% Problema, arquitetura, categorias de atrito e resultados; o que o TCC adota.
+
+O SPAPI-Tester \cite{wang2025spapi} automatizou o processo completo de teste
+de APIs de caminhões num fabricante automotivo. Os engenheiros precisavam
+relacionar propriedades de uma API, descritas em especificações, a sinais de
+um veículo virtual, descritos em outros documentos, e o mapeamento entre esses
+silos exigia especialistas. Os autores preservaram o processo de teste
+existente: LLMs fazem as etapas manuais que exigem compreensão de linguagem,
+como o mapeamento entre documentos, e devolvem saídas tipadas. Código
+determinístico renderiza e executa os testes a partir de \emph{templates}.
+
+Este trabalho adota essa divisão para a integração de dados, com três
+diferenças. O artefato renderizado é uma junção dbt, e não um teste. A
+abstenção é uma resposta prevista. E a mesma limitação é aplicada também ao
+agente que constrói o sistema. A Tabela~\ref{tab:artigo-base} resume o
+paralelo.
+
+\begin{table}[htbp]
+\centering
+\caption{Paralelo entre o artigo-base e este trabalho}
+\label{tab:artigo-base}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Aspecto} & \textbf{SPAPI-Tester} & \textbf{Este trabalho} \\
+\midrule
+Domínio & Testes de APIs de caminhões & Integração de bases federais \\
+Fontes em silos & Especificações de API, tabelas de sinais, veículo virtual & SIAFI, Transferegov, SALIC, IBGE e outras \\
+O mapeamento & Propriedade da API $\rightarrow$ sinal $\rightarrow$ estado do veículo & Colunas de $A$ $\rightarrow$ colunas de $B$, com transformação \\
+Saída do LLM & Dicionário tipado de mapeamento & Dicionário de mapeamento ou abstenção \\
+Artefato gerado & Script de teste, por \emph{template} & \emph{Model} dbt da junção, por \emph{template} \\
+Verificação & Execução dos testes & Execução da junção e verificações de cardinalidade e cobertura \\
+\bottomrule
+\end{tabularx}
+\end{table}

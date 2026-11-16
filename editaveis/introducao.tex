@@ -2,39 +2,190 @@
 \chapter{Introdução}
 \label{chap:introducao}
 
-% Abertura do capítulo: um parágrafo dizendo o que ele apresenta.
+Este capítulo apresenta o contexto do trabalho, o problema que ele trata, a
+justificativa, as questões de pesquisa, os objetivos e as contribuições
+esperadas, e termina com a organização do restante do texto.
 
 \section{Contexto}
 \label{sec:introducao-contexto}
-% Dados públicos federais em silos; o GovHub-br e a parceria UnB--ministérios.
+
+Uma mesma política pública federal costuma ser registrada em vários sistemas
+de informação. Cada sistema foi construído para um propósito, por uma equipe
+ou empresa diferente, e é gerido por um órgão diferente. A execução
+orçamentária de um repasse fica no Sistema Integrado de Administração
+Financeira (SIAFI); o instrumento de transferência, no Transferegov; os
+projetos incentivados da cultura, no Sistema de Apoio às Leis de Incentivo à
+Cultura (SALIC); as informações territoriais, nas bases do Instituto
+Brasileiro de Geografia e Estatística (IBGE). Quem acompanha a política
+precisa cruzar esses registros, mas eles raramente compartilham um
+identificador comum.
+
+O marco legal brasileiro obriga a publicação desses dados
+\cite{lai2011,decreto8777} e orienta o seu compartilhamento entre órgãos
+\cite{decreto10046,lei14129}. Publicar e compartilhar, porém, não torna os
+dados interoperáveis. Na terminologia do Quadro Europeu de Interoperabilidade
+\cite{eif2017}, o obstáculo deste trabalho está na camada semântica: as bases
+descrevem as mesmas entidades com nomes, formatos e códigos diferentes.
+Resolver a interoperabilidade na origem exigiria mudar sistemas de órgãos
+distintos, o que não está ao alcance de quem monitora a política. A
+alternativa prática é integrar os dados depois de coletados, num repositório
+único por política pública.
+
+É o que faz o Gov Hub, uma plataforma de dados de código aberto desenvolvida
+pelo Lab Livre, laboratório da Universidade de Brasília (UnB), em parceria
+com ministérios do governo federal. O Gov Hub ingere fontes federais num
+banco PostgreSQL e mantém os cruzamentos entre elas como \emph{models} do dbt,
+isto é, transformações SQL versionadas. No Ministério da Cultura (MinC), a
+plataforma é mantida no repositório \texttt{data-application-minc}, no âmbito
+do TED n.º 01/2026/SGE/SE/MinC, e serve ao acompanhamento das metas da Política
+Nacional Aldir Blanc (PNAB) e da Lei Paulo Gustavo (LPG). Esse repositório é
+o estudo de caso deste trabalho.
 
 \section{Problema}
 \label{sec:introducao-problema}
-% O de-para entre bases (códigos, nomes e formatos diferentes) é manual e depende de conhecimento implícito do analista.
+
+Cruzar duas tabelas começa por descobrir a chave de junção: qual coluna de
+cada lado identifica a mesma entidade e o que é preciso fazer com ela para
+que os valores coincidam. Chamamos de \emph{atrito} cada diferença que impede
+duas colunas de serem unidas diretamente. Um número de empenho pode aparecer
+no formato curto numa base e no identificador SIAFI completo em outra; um
+código de município pode ter seis dígitos numa fonte e sete em outra; o
+número de um instrumento de transferência pode estar escrito à mão num campo
+de descrição.
+
+No levantamento feito para este trabalho, das 29 condições de junção entre
+fontes diferentes encontradas no código de produção do Gov Hub, apenas uma é
+uma igualdade direta entre colunas sem transformação
+(Capítulo~\ref{chap:estudodecaso}). Em uma delas, o número que liga uma nota
+de empenho ao seu Termo de Execução Descentralizada (TED) é recuperado de
+campos de texto livre por uma cascata de dezesseis passos, a maioria
+expressões regulares. Na experiência da equipe do Gov Hub, entender como dois
+conjuntos de dados federais se relacionam leva de dois a três meses, e o
+trabalho recomeça a cada novo par de fontes.
+
+As ferramentas existentes resolvem partes do problema. Os \emph{schema
+matchers} devolvem correspondências entre colunas, mas não a transformação
+que cada lado precisa \cite{rahm2001survey,koutras2021valentine}. Um modelo
+de linguagem de grande porte (\emph{Large Language Model}, LLM) traz o
+conhecimento de domínio que falta aos \emph{matchers}, mas, se escrever ele
+mesmo o SQL da junção, pode produzir um resultado que executa sem erro e usa
+as colunas erradas. Quando um LLM é parte de um sistema, é comum não estar
+claro o que ele pode decidir nem como a sua saída é verificada
+\cite{shao2025integration}.
 
 \section{Justificativa}
 \label{sec:introducao-justificativa}
-% Custo de integrar cada nova fonte; o padrão do SPAPI-Tester (LLM embutido no processo) ainda não aplicado a dados abertos.
+
+O custo de descobrir chaves se repete a cada fonte nova e recai sobre poucas
+pessoas que conhecem o processo orçamentário. Reduzir esse custo amplia o que
+uma equipe pequena consegue integrar e, no caso do MinC, o que o ministério
+consegue monitorar sobre as suas políticas.
+
+Há um precedente fora da área de dados. O SPAPI-Tester
+\cite{wang2025spapi} automatizou um processo industrial de testes de APIs
+mantendo o processo existente: LLMs fazem apenas as etapas manuais que exigem
+compreensão de linguagem, e código determinístico gera e executa os testes.
+Este trabalho adota a mesma divisão para a integração de dados e a leva a
+dois níveis, um princípio que chamamos de \emph{agência limitada}: o modelo
+decide apenas o que exige julgamento, e artefatos que ele não produziu
+restringem e verificam essa decisão. Em tempo de execução, o LLM só escolhe a
+chave, a partir de um catálogo fechado de operações, ou se abstém. Em tempo de
+construção, o agente de IA de código que implementa o sistema só implementa
+o que uma especificação revisada por uma pessoa exige, no processo conhecido
+como \emph{Spec-Driven Development} (SDD) \cite{speckit,bockeler2025sdd}.
+
+Os dois níveis têm pouca avaliação empírica. Não encontramos, para a
+descoberta de chaves, uma abordagem que combine LLM, transformações
+verificáveis e abstenção explícita (Capítulo~\ref{chap:trabalhosrelacionados}).
+Para o SDD, os relatos são em grande parte de praticantes
+\cite{agarwal2026sdd}, e não encontramos uma comparação pareada do trabalho de
+um agente com e sem especificação medida por testes escondidos dele.
 
 \section{Questões de pesquisa}
 \label{sec:introducao-questoes-de-pesquisa}
-% QP1 a QP5; tabela com pergunta e como será respondida.
+
+O trabalho é guiado por cinco questões de pesquisa (QP), detalhadas no
+Capítulo~\ref{chap:metodologia} e resumidas na Tabela~\ref{tab:qps}.
+
+\begin{table}[htbp]
+\centering
+\caption{Questões de pesquisa}
+\label{tab:qps}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule
+\textbf{QP} & \textbf{Pergunta} & \textbf{Como será respondida} \\
+\midrule
+QP1 & Com que acurácia o sistema descobre chaves, por tipo de atrito, em comparação com \emph{matchers} clássicos, regras e outros usos do LLM? & Benchmark de pares reais e perturbados; cinco \emph{baselines}; acerto de chave e de execução \\
+QP2 & Um modelo de pesos abertos hospedado localmente alcança um modelo proprietário? & Mesmos pares na condição do sistema completo, com dois ou três modelos \\
+QP3 & O sistema torna analistas mais rápidos e mais certeiros? & Estudo piloto cruzado com analistas do Gov Hub \\
+QP4 & Em pares que o MinC ainda não integra, quantas chaves e abstenções propostas são confirmadas por quem conhece as bases? & Aplicação do sistema às fontes do \texttt{data-application-minc} \\
+QP5 & O SDD permite que um agente de IA construa e estenda o sistema com qualidade verificável? & Comparação pareada com e sem especificação, medida por testes-oráculo \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{Objetivos}
 \label{sec:introducao-objetivos}
 
 \subsection{Objetivo geral}
 \label{subsec:introducao-objetivo-geral}
-% Propor, implementar e avaliar uma arquitetura config-driven de três camadas que integre bases governamentais heterogêneas, com LLM embutido para descobrir chaves de integração.
+
+Projetar, construir por \emph{Spec-Driven Development} e avaliar um sistema em
+que um LLM, limitado por artefatos verificáveis, descobre chaves de
+integração entre bases governamentais heterogêneas, e aplicá-lo às fontes do
+Ministério da Cultura no Gov Hub.
 
 \subsection{Objetivos específicos}
 \label{subsec:introducao-objetivos-especificos}
-% Lista numerada: Source Registry, costuras, Decision Layer com DSPy, ground truth, avaliação, construção por SDD (QP5).
+
+\begin{enumerate}
+\item Implementar o estágio de decisão com um LLM que devolve uma saída
+tipada (chave ou abstenção) expressa num catálogo fechado de transformações.
+\item Implementar o estágio determinístico que gera, a partir dessa saída, o
+\emph{model} dbt da junção e as verificações que o validam.
+\item Construir um benchmark de chaves de integração com pares reais e
+perturbados, rotulados por tipo de atrito, e dividido sem vazamento entre
+desenvolvimento e teste.
+\item Avaliar o sistema contra \emph{baselines} e em diferentes níveis de
+contexto de domínio (QP1 a QP3).
+\item Aplicar o sistema a pares de fontes do MinC ainda não integrados e
+entregar os \emph{models} confirmados ao repositório
+\texttt{data-application-minc} (QP4).
+\item Construir o sistema por SDD com agente de IA de código e avaliar esse
+processo por comparação pareada (QP5).
+\end{enumerate}
 
 \section{Contribuições esperadas}
 \label{sec:introducao-contribuicoes-esperadas}
-% Arquitetura aberta, gerador dbt config-driven, benchmark de chaves por categoria de atrito, replicação do artigo-base, relato avaliado de SDD.
+
+\begin{itemize}
+\item Uma arquitetura de agência limitada para descoberta de chaves, com os
+requisitos que ela impõe ao componente LLM e a forma de verificá-los fora do
+modelo.
+\item Uma definição de chave correta e uma matriz de decisão que separa as
+abstenções do acerto de chave.
+\item Um benchmark aberto de chaves de integração em bases públicas
+brasileiras: gabaritos dos pares reais e um gerador reproduzível de pares
+perturbados.
+\item Um Mapa de Fluxo do processo orçamentário federal, reutilizável pelo
+Gov Hub independentemente do sistema.
+\item Novos cruzamentos entre fontes do MinC, validados e entregues como
+\emph{models} dbt.
+\item Evidência pareada do efeito de uma especificação completa sobre o
+trabalho de um agente de IA de código.
+\end{itemize}
 
 \section{Organização do trabalho}
 \label{sec:introducao-organizacao-do-trabalho}
-% Um parágrafo por capítulo.
+
+O Capítulo~\ref{chap:fundamentacao} apresenta os conceitos de integração de
+dados, perfilamento, modelos de linguagem em sistemas e
+\emph{Spec-Driven Development}. O Capítulo~\ref{chap:trabalhosrelacionados}
+discute os trabalhos relacionados e a lacuna que este trabalho ocupa. O
+Capítulo~\ref{chap:metodologia} descreve o método de pesquisa, o protocolo de
+avaliação e o cronograma. O Capítulo~\ref{chap:arquitetura} apresenta o
+sistema proposto. O Capítulo~\ref{chap:estudodecaso} descreve o estudo de caso
+no Gov Hub e no MinC e os resultados preliminares. O
+Capítulo~\ref{chap:consideracoes} encerra esta primeira etapa com os próximos
+passos para o TCC~2.

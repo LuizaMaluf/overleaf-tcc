@@ -1,0 +1,37 @@
+% Capítulo — TCC 1 (substituído pela Conclusão no TCC 2)
+\chapter{Considerações finais do TCC 1}
+\label{chap:consideracoes}
+
+Esta primeira etapa definiu o problema, o princípio de projeto e o desenho da
+avaliação. O problema é a descoberta de chaves de integração entre bases
+governamentais que descrevem as mesmas entidades com nomes, formatos e
+códigos diferentes: no Gov Hub, 28 das 29 condições de junção entre fontes
+precisam de alguma transformação. O princípio é a agência limitada: o LLM
+contribui com conhecimento de domínio, mas escolhe dentro de um catálogo
+fechado ou se abstém, e código determinístico constrói e verifica a junção. O
+mesmo princípio limita o agente de IA que constrói o sistema, por meio de
+especificações revisadas e testes escondidos dele.
+
+Se essa limitação melhora a acurácia em relação ao \emph{matching} clássico e
+ao uso livre do LLM é uma questão empírica, assim como saber se uma
+especificação completa melhora o trabalho do agente. O estudo foi desenhado
+para responder às duas. No MinC, o sistema será aplicado a fontes que o
+ministério já ingere mas ainda não cruza, com a meta de entregar novos
+cruzamentos validados.
+
+Para o TCC~2, os próximos passos são, em ordem:
+
+\begin{enumerate}
+\item construir por SDD a chamada de decisão tipada, a abstenção, o catálogo,
+o achatamento de JSON e a renderização dbt;
+\item montar o benchmark (pares reais com \emph{snapshots}, gerador de pares
+perturbados e divisão sem vazamento), o \emph{harness} e os
+\emph{baselines}, e escrever o Mapa de Fluxo;
+\item congelar o conjunto de teste, o catálogo e o Mapa de Fluxo;
+\item executar a QP1 a QP3 e aplicar o sistema aos pares do MinC (QP4);
+\item consolidar os registros da QP5 e escrever os capítulos de resultados e
+discussão.
+\end{enumerate}
+
+O sistema, o benchmark (gabaritos e gerador de pares) e os artefatos do SDD
+serão publicados no repositório do projeto.

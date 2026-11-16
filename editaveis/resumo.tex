@@ -1,17 +1,32 @@
 \begin{resumo}
- O resumo deve ressaltar o objetivo, o método, os resultados e as conclusões 
- do documento. A ordem e a extensão
- destes itens dependem do tipo de resumo (informativo ou indicativo) e do
- tratamento que cada item recebe no documento original. O resumo deve ser
- precedido da referência do documento, com exceção do resumo inserido no
- próprio documento. (\ldots) As palavras-chave devem figurar logo abaixo do
- resumo, antecedidas da expressão Palavras-chave:, separadas entre si por
- ponto e finalizadas também por ponto. O texto pode conter no mínimo 150 e 
- no máximo 500 palavras, é aconselhável que sejam utilizadas 200 palavras. 
- E não se separa o texto do resumo em parágrafos.
+Órgãos federais acompanham políticas públicas com dados espalhados por
+sistemas que foram construídos e são geridos separadamente, e poucos deles
+compartilham uma chave que uma junção possa usar diretamente. Os
+identificadores mudam de formato, precisam ser combinados ou aparecem apenas
+em texto livre. No Gov Hub, plataforma de dados de código aberto desenvolvida
+pela Universidade de Brasília com ministérios federais, apenas uma das 29
+condições de junção entre fontes do código de produção é uma igualdade direta
+entre colunas sem transformação. Os \textit{schema matchers} não produzem
+essas transformações, e um modelo de linguagem de grande porte (LLM) que
+escreve o SQL da junção pode devolver uma junção errada que executa sem erro.
+Este trabalho propõe um sistema em que o LLM apenas escolhe a chave, a partir
+de evidências coletadas antes e de um catálogo fechado de operações, ou se
+abstém, enquanto código determinístico gera e verifica a junção em dbt. O
+mesmo princípio, que chamamos de agência limitada, é aplicado ao agente de IA
+de código que constrói o sistema por \textit{Spec-Driven Development}. O
+método é a \textit{Design Science Research} com estudo de caso no repositório
+do Ministério da Cultura no Gov Hub. A avaliação planejada compara o sistema
+com \textit{matchers} clássicos, regras e outros usos do LLM num benchmark de
+pares reais e perturbados, compara modelos abertos e proprietários, mede o
+efeito sobre analistas, aplica o sistema a pares de fontes do ministério
+ainda não integrados e compara o trabalho do agente com e sem especificação
+por testes escondidos dele. Esta primeira etapa apresenta o problema, o
+desenho do sistema, o protocolo do estudo e os resultados preliminares.
 
  \vspace{\onelineskip}
-    
+
  \noindent
- \textbf{Palavras-chave}: latex. abntex. editoração de texto.
+ \textbf{Palavras-chave}: integração de dados. modelos de linguagem.
+ \textit{spec-driven development}. dados abertos governamentais.
+ \textit{schema matching}.
 \end{resumo}

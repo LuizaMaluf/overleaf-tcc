@@ -1,25 +1,262 @@
 % Capítulo — TCC 1
-\chapter{Arquitetura proposta}
+\chapter{Sistema proposto}
 \label{chap:arquitetura}
 
-% Abertura do capítulo: um parágrafo dizendo o que ele apresenta.
+Este capítulo apresenta o sistema de descoberta de chaves e o princípio que o
+organiza, a agência limitada. Descreve o projeto-alvo; o que já está
+implementado é relatado no Capítulo~\ref{chap:estudodecaso}. As regras deste
+capítulo definem os requisitos do componente LLM: o que ele pode decidir, o
+que precisa devolver e como a sua saída é verificada.
 
-\section{Visão geral das três camadas}
+\section{Agência limitada em dois níveis}
 \label{sec:arquitetura-visao-geral-das-tres-camadas}
-% Ingestão, transformação e integração; figura da arquitetura.
 
-\section{Source Registry}
-\label{sec:arquitetura-source-registry}
-% O contrato YAML (ADR 0008).
+O sistema aplica um único princípio em dois níveis: o modelo decide apenas o
+que exige julgamento, e artefatos que ele não produziu (um catálogo,
+verificações executáveis, uma especificação revisada) restringem e verificam
+essa decisão. A Figura~\ref{fig:dois-niveis} mostra os dois níveis.
 
-\section{Costuras A, B e C}
-\label{sec:arquitetura-costuras-a-b-e-c}
-% Sincronização silver, geração do dbt, leitura do banco (ADRs 0009 e 0010).
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=6mm,
+  caixa/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
+    minimum height=12mm, text width=30mm, inner sep=3pt},
+  decide/.style={caixa, fill=black!10, very thick},
+  seta/.style={-{Stealth[length=2mm]}, thick},
+  rotulo/.style={font=\footnotesize\bfseries, anchor=west},
+  artefato/.style={font=\scriptsize\itshape, align=center}
+]
+\node[rotulo] (rt) at (0,0) {Tempo de execução: encontrar e validar a chave};
+\node[caixa, below=4mm of rt.south west, anchor=north west] (e1) {\textbf{Evidências}\\perfilar e ordenar\\colunas};
+\node[decide, right=of e1] (e2) {\textbf{LLM decide}\\chave ou abstenção};
+\node[caixa, right=of e2] (e3) {\textbf{Validação}\\\emph{model} dbt e\\verificações};
+\draw[seta] (e1) -- (e2);
+\draw[seta] (e2) -- (e3);
+\node[artefato, below=1.5mm of e2] (art) {restrito por: Catálogo,\\Glossário, Mapa de Fluxo};
 
-\section{Decision Layer com LLM embutido}
+\node[rotulo, below=12mm of e1.south west, anchor=north west] (rc) {Tempo de construção: implementar o sistema por SDD};
+\node[caixa, below=4mm of rc.south west, anchor=north west] (c1) {\textbf{Especificação}\\revisada por\\pessoas};
+\node[decide, right=of c1] (c2) {\textbf{Agente de código}\\implementa};
+\node[caixa, right=of c2] (c3) {\textbf{Testes-oráculo}\\escondidos\\verificam};
+\draw[seta] (c1) -- (c2);
+\draw[seta] (c2) -- (c3);
+\draw[seta, dashed] (c3.east) -- ++(4mm,0) |- node[artefato, pos=0.25, right]{constrói} (e3.east);
+\end{tikzpicture}
+\caption{Agência limitada em dois níveis. As caixas em destaque são as únicas
+etapas em que um modelo decide.}
+\label{fig:dois-niveis}
+\end{figure}
+
+\section{Tempo de execução: o LLM decide, o código valida}
 \label{sec:arquitetura-decision-layer-com-llm-embutido}
-% Evidências, dicionário de mapeamento tipado, estágio determinístico (ADR 0011).
+
+Dadas duas tabelas $A$ e $B$, o sistema devolve uma junção validada ou uma
+abstenção, em três estágios (Figura~\ref{fig:pipeline}). Só o estágio~2 chama
+um modelo; os estágios~1 e 3 são determinísticos, isto é, produzem o mesmo
+resultado para a mesma entrada.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=5mm,
+  caixa/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
+    minimum height=13mm, text width=30mm, inner sep=3pt},
+  llm/.style={caixa, fill=black!10, very thick},
+  seta/.style={-{Stealth[length=2mm]}, thick},
+  rot/.style={font=\scriptsize\itshape, align=center}
+]
+\node[caixa] (s1) {\textbf{1. Evidências}\\perfilar colunas,\\ordenar candidatos};
+\node[llm, right=of s1] (s2) {\textbf{2. Decisão}\\chave ou abstenção;\\operações do catálogo};
+\node[caixa, right=of s2] (s3) {\textbf{3. Validação}\\renderizar o dbt;\\executar verificações};
+\draw[seta] (s1) -- (s2);
+\draw[seta] (s2) -- (s3);
+\draw[seta, dashed] (s3.south) -- ++(0,-6mm) node[rot, below]{verificação falha $\Rightarrow$ decisão rejeitada};
+\node[rot, above=1mm of s1] {determinístico};
+\node[rot, above=1mm of s2] {LLM};
+\node[rot, above=1mm of s3] {determinístico};
+\end{tikzpicture}
+\caption{Os três estágios em tempo de execução. Só o estágio~2 chama um
+modelo, e ele nunca escreve SQL nem expressões regulares.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Estágio 1: evidências}
+
+Este estágio reúne as evidências que os nomes sozinhos não mostram. Ele
+perfila todas as colunas das duas tabelas (tipo, cardinalidade, unicidade,
+nulos, padrões de valor e amostras), achata JSON aninhado e ordena os pares
+de colunas candidatos por \emph{scores} de nome e de conteúdo. O \emph{score}
+de conteúdo não usa o nome da coluna: considera padrões de formato,
+sobreposição de valores e relações de substring que indicam chaves
+derivadas.
+
+\subsection{Estágio 2: decisão}
+
+O LLM recebe o esquema completo, os perfis e os candidatos ordenados. Devolve
+uma abstenção ou um \emph{dicionário de mapeamento} tipado com:
+
+\begin{itemize}
+\item as colunas da chave de cada lado (possivelmente compostas);
+\item uma transformação para cada lado, expressa no catálogo;
+\item a cardinalidade esperada;
+\item o tipo de atrito resolvido;
+\item um nível de confiança e uma justificativa curta.
+\end{itemize}
+
+A ordenação organiza as opções, mas não as restringe. O modelo pode propor uma
+chave fora da lista, como uma chave composta ou derivada que nenhum par
+candidato representa. A chamada usa uma assinatura DSPy
+\cite{khattab2024dspy} com esquema de saída tipado e é repetida quando a
+validação da saída falha, até um limite configurável. O provedor e o modelo
+vêm da configuração, sem mudança de código, para permitir a comparação da
+QP2.
+
+\subsection{Catálogo de transformações}
+\label{sec:arquitetura-catalogo}
+
+O catálogo mantém o modelo fora do código executado: o modelo nomeia
+operações, e o SQL vem de \emph{templates} fixos. A transformação de cada lado
+é uma sequência de no máximo três operações de um catálogo fechado e
+versionado (Tabela~\ref{tab:catalogo}). Cada operação tem um \emph{template}
+SQL fixo e um teste unitário. Uma chave que o catálogo não consegue
+expressar leva a uma abstenção com esse motivo, contada à parte na
+avaliação.
+
+\begin{table}[htbp]
+\centering
+\caption{Operações do catálogo de transformações (rascunho)}
+\label{tab:catalogo}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Operação} & \textbf{O que faz} \\
+\midrule
+converter tipo & muda o tipo da coluna (texto, inteiro, data) \\
+normalizar texto & caixa, acentos e espaços \\
+remover máscara & retira pontuação de identificadores (CNPJ, processo) \\
+preencher zeros & completa com zeros à esquerda até um tamanho \\
+trecho & extrai uma parte por posição \\
+concatenar & junta colunas num identificador \\
+mapear valores & troca valores por equivalentes \\
+converter data & muda o formato de data \\
+extrair identificador(tipo) & extrai de texto livre um identificador do tipo dado, com o padrão definido no Mapa de Fluxo \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+A operação \emph{mapear valores} é limitada: os pares de valores precisam vir
+do Glossário versionado ou de valores observados nas duas colunas. O modelo
+não pode inventar valores de domínio.
+
+\subsection{Contexto de domínio}
+\label{sec:arquitetura-contexto}
+
+As junções de produção mais difíceis tiram a chave de texto livre, e um
+analista só as reconhece porque conhece o processo orçamentário. Por isso, o
+modelo pode receber dois artefatos:
+
+\begin{description}
+\item[Glossário] sinônimos de coluna e padrões de identificador.
+\item[Mapa de Fluxo] descreve o processo orçamentário federal em nível de
+documento (Figura~\ref{fig:mapa-fluxo}, acima): quais documentos existem,
+qual sistema registra cada um, o formato de cada identificador e onde o
+número de um documento é carregado no registro de outro, com a fonte pública
+que sustenta cada elo. O Mapa descreve elos, nunca condições de junção.
+\end{description}
+
+Com o Mapa, o modelo pode afirmar que uma coluna de texto livre carrega um
+identificador, por exemplo, um número de transferência dentro da descrição de
+uma nota de empenho. A operação \emph{extrair identificador(tipo)} faz então a
+extração, com o padrão definido no Mapa congelado. Cada formato de
+identificador no Mapa cita uma fonte pública, como uma norma ou um manual
+oficial, e o padrão aplicado é escrito a partir desse formato, sem consultar
+as expressões regulares do SQL de produção do Gov Hub.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=4mm,
+  doc/.style={draw, rounded corners=2pt, align=center, font=\footnotesize, minimum height=10mm, text width=20mm, inner sep=2pt},
+  col/.style={draw, align=center, font=\footnotesize, minimum height=6mm, inner sep=3pt},
+  seta/.style={-{Stealth[length=2mm]}, thick},
+  rot/.style={font=\scriptsize\itshape, align=center}
+]
+\node[doc] (ted) {\textbf{TED}\\Transferegov};
+\node[doc, right=of ted] (nc) {\textbf{NC}\\SIAFI};
+\node[doc, right=of nc] (pf) {\textbf{PF}\\SIAFI};
+\node[doc, right=of pf] (ne) {\textbf{NE}\\SIAFI};
+\draw[seta] (ted) -- (nc);
+\draw[seta] (nc) -- (pf);
+\draw[seta] (pf) -- (ne);
+\draw[seta, dashed] (ted.north) to[bend left=20] node[rot, above]{número do TED escrito na descrição da NE (texto livre)} (ne.north);
+\node[col, below=14mm of ted.south west, anchor=north west] (ug) {UG};
+\node[col, right=1mm of ug] (ge) {gestão};
+\node[col, right=1mm of ge] (nu) {número da NE};
+\node[rot, above=1mm of ge] {Compras.gov: três colunas};
+\node[col, right=18mm of nu] (full) {UG$\Vert$gestão$\Vert$NE};
+\node[rot, above=1mm of full] {Tesouro Gerencial (SIAFI): uma coluna};
+\draw[seta] (nu.east) -- node[rot, below=1.5mm]{concatenar} (full.west);
+\end{tikzpicture}
+\caption{Acima: um fragmento do Mapa de Fluxo das transferências federais
+(TED: Termo de Execução Descentralizada; NC: nota de crédito; PF: programação
+financeira; NE: nota de empenho). Abaixo: uma chave derivada composta, porque
+uma fonte guarda as partes do identificador SIAFI de uma nota de empenho em
+três colunas e a outra, numa única cadeia.}
+\label{fig:mapa-fluxo}
+\end{figure}
+
+\subsection{Estágio 3: validação}
+
+Um \emph{template} renderiza o dicionário de mapeamento num \emph{model} dbt
+com testes de dados, e a junção é executada. A execução é um sinal
+\emph{necessário, mas não suficiente}: uma junção pode funcionar sobre colunas
+erradas, mas correlacionadas. Por isso, as verificações incluem:
+
+\begin{itemize}
+\item a concordância das chaves transformadas com a cardinalidade declarada
+pelo LLM, incluindo a unicidade da chave em cada lado quando a declaração a
+exige;
+\item a taxa de correspondência nas duas direções;
+\item a razão de multiplicação de linhas;
+\item quando disponível, uma restrição de domínio independente, como mesma UF,
+mesmo período ou mesmo tipo de entidade.
+\end{itemize}
+
+Uma decisão que falha em qualquer verificação é rejeitada.
+
+\section{Tempo de construção: o agente implementa, a especificação decide}
+\label{sec:arquitetura-tempo-de-construcao}
+
+Em tempo de construção, a especificação limita o agente de código da mesma
+forma que o catálogo e as verificações limitam o LLM em execução. Cada
+incremento (por exemplo, abstenção, catálogo, renderização dbt) começa por
+uma especificação com enunciado do problema, escopo, contrato e critérios de
+aceite verificáveis. O agente produz um plano, implementa, valida e registra
+uma ADR quando necessário. O agente preenche a implementação, mas a
+especificação, escrita e revisada por uma pessoa, define o que conta como
+pronto. Testes escondidos do agente verificam o resultado
+(Seção~\ref{sec:metodologia-protocolo-de-avaliacao}).
 
 \section{Decisões de arquitetura}
 \label{sec:arquitetura-decisoes-de-arquitetura}
-% Resumo das ADRs.
+
+As decisões que sustentam o desenho estão registradas em ADRs no repositório
+do sistema. A Tabela~\ref{tab:adrs} resume as duas vigentes. As ADRs 0001 a
+0010 tratavam da pilha de ingestão própria e foram descontinuadas quando a
+ingestão passou a ser responsabilidade do Gov Hub.
+
+\begin{table}[htbp]
+\centering
+\caption{Decisões de arquitetura vigentes}
+\label{tab:adrs}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{ADR} & \textbf{Decisão} & \textbf{Alternativas rejeitadas} \\
+\midrule
+0011 & LLM embutido com saída tipada: o LLM só decide o mapeamento, nunca escreve SQL; catálogo fechado; mapeamento de valores limitado; validação além da execução; modelo trocado por configuração & \emph{Prompt} livre com extração de JSON; LLM gerando o SQL (medido como B4); transformação em texto livre; LLM apenas reordenando candidatos \\
+0012 & Mapa de Fluxo como contexto do LLM; o LLM nomeia o que a coluna carrega e o estágio determinístico extrai com \emph{extrair identificador(tipo)} & LLM devolvendo a expressão regular; operações de texto \emph{ad hoc} no catálogo; aceitar a abstenção nesses pares \\
+\bottomrule
+\end{tabularx}
+\end{table}

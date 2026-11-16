@@ -1,10 +1,31 @@
 \begin{resumo}[Abstract]
  \begin{otherlanguage*}{english}
-   This is the english abstract.
+Brazilian federal agencies monitor public policies with data spread across
+systems that were built and are managed separately, and few of them share a
+key a join can use directly. Their identifiers differ in format, must be
+combined, or appear only inside free text. In Gov Hub, an open-source data
+platform built by the University of Brasília with federal ministries, only
+one of 29 cross-source join conditions in production code is a direct
+equality between untransformed columns. Schema matchers do not produce these
+transformations, and a Large Language Model (LLM) that writes the join SQL
+can return a wrong join that still runs. This work proposes a system in which
+the LLM only chooses the key, from evidence collected beforehand and a closed
+catalog of operations, or abstains, while deterministic code generates and
+checks the join in dbt. The same principle, which we call bounded agency,
+applies to the coding agent that builds the system through Spec-Driven
+Development. The method is Design Science Research with a case study in the
+Ministry of Culture's Gov Hub repository. The planned evaluation compares the
+system with classical matchers, rules, and other LLM uses on a benchmark of
+real and perturbed pairs, compares open and proprietary models, measures the
+effect on analysts, applies the system to source pairs the ministry does not
+yet join, and compares the agent's work with and without a spec using tests
+hidden from it. This first stage presents the problem, the system design, the
+study protocol, and preliminary results.
 
    \vspace{\onelineskip}
- 
-   \noindent 
-   \textbf{Key-words}: latex. abntex. text editoration.
+
+   \noindent
+   \textbf{Keywords}: data integration. language models. spec-driven
+   development. open government data. schema matching.
  \end{otherlanguage*}
 \end{resumo}

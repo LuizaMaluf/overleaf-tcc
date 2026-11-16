@@ -2,32 +2,335 @@
 \chapter{Metodologia}
 \label{chap:metodologia}
 
-% Abertura do capítulo: um parágrafo dizendo o que ele apresenta.
+Este capítulo descreve o método de pesquisa, o processo de construção do
+sistema, o que conta como chave correta, o desenho do estudo para cada
+questão de pesquisa, as ameaças à validade e o cronograma.
 
-\section{Design Science Research com estudo de caso}
+\section{\emph{Design Science Research} com estudo de caso}
 \label{sec:metodologia-design-science-research-com-estudo-de-caso}
-% Hevner et al. (2004); Peffers et al. (2007); ciclos de construção e avaliação; estudo de caso com bases do GovHub.
 
-\section{Spec-Driven Development}
+O trabalho segue a \emph{Design Science Research} (DSR)
+\cite{hevner2004design,wieringa2014design}: constrói um artefato para um
+problema real e o avalia em ciclos de construção e avaliação. O artefato é o
+sistema de descoberta de chaves descrito no Capítulo~\ref{chap:arquitetura}.
+A avaliação combina um experimento controlado, num benchmark com gabarito
+(QP1 e QP2), com um estudo de caso \cite{runeson2009case} nas fontes do
+Ministério da Cultura no Gov Hub (QP4), onde o sistema é aplicado a pares que
+ainda não estão integrados. O estudo piloto com analistas (QP3) e a
+comparação pareada do processo de construção (QP5) completam a avaliação.
+
+Os ciclos anteriores do projeto estão registrados no histórico do
+repositório do sistema\footnote{\url{https://github.com/LuizaMaluf/Integracao-de-Dados-com-Modelos-de-Linguagem}}:
+um primeiro conjunto de \emph{skills} para agentes de IA, depois um pacote
+Python com uma camada de decisão, depois uma pilha de ingestão própria,
+removida quando o escopo passou a ser apenas a descoberta de chaves. A
+ingestão das bases é feita pelo Gov Hub; o sistema lê do PostgreSQL da
+plataforma ou de \emph{snapshots} datados exportados dela.
+
+\section{\emph{Spec-Driven Development}}
 \label{sec:metodologia-spec-driven-development}
-% Ciclo: spec com critérios de aceite, plano, implementação por agente de IA, validação, ADR. Modelo em docs/specs/_template.md.
 
-\section{Ciclos de iteração}
-\label{sec:metodologia-ciclos-de-iteracao}
-% PoC IBGE, costuras A/B/C, avaliação; evidência no histórico do repositório.
+O SDD é, ao mesmo tempo, o processo de construção do sistema e um objeto de
+avaliação (QP5). Cada incremento segue o ciclo:
 
-\section{Ground truth}
+\begin{enumerate}
+\item a autora escreve uma especificação com problema, escopo, contrato e
+critérios de aceite verificáveis, a partir de um modelo versionado no
+repositório;
+\item a especificação é revisada e aprovada antes de qualquer código;
+\item um agente de IA de código produz um plano e implementa o incremento;
+\item a implementação é validada contra os critérios de aceite e os testes;
+\item quando há decisão de arquitetura, ela é registrada numa ADR.
+\end{enumerate}
+
+A especificação cumpre no desenvolvimento o papel que o processo estruturado
+cumpre no artigo-base: é a estrutura fixa, e o agente apenas preenche a
+implementação. Quem decide o que conta como pronto é a especificação, escrita
+e revisada por uma pessoa.
+% TODO: decidir entre o fluxo próprio com Claude Code e o Spec Kit.
+
+\section{O que conta como chave correta}
+\label{sec:metodologia-chave-correta}
+
+Cada par de avaliação terá um \emph{gabarito}: um conjunto de \emph{chaves
+aceitáveis}. Cada chave aceitável é formada por colunas de $A$, colunas de
+$B$, uma transformação do catálogo para cada lado e a cardinalidade esperada
+(por exemplo, 1:1 ou N:1). Chaves compostas e derivadas são permitidas.
+Cascatas de alternativas no SQL de produção viram várias chaves aceitáveis, e
+filtros (por exemplo, os registros de um único ministério) viram o
+\emph{escopo do par}, aplicado às duas tabelas antes da avaliação, e não parte
+da chave. \emph{Pares negativos} têm gabarito vazio, e a resposta correta é a
+abstenção.
+
+O estudo pontua dois níveis:
+
+\begin{description}
+\item[Acerto de chave] as colunas escolhidas coincidem com alguma chave
+aceitável, qualquer que seja a transformação. É o único nível em que B0 e B1,
+que não produzem transformação, são avaliados.
+\item[Acerto de execução] julga as transformações. Compara os pares de linhas
+produzidos pela junção proposta com os da \emph{junção de referência}, que
+usa uma chave aceitável e aplica o escopo do par. Será reportado como
+precisão, revocação e F1, com limiar inicial de F1~$\geq$~0,90, congelado
+junto com o conjunto de teste. Para chaves extraídas de texto livre, a
+referência é a saída materializada do SQL de produção.
+\end{description}
+
+Para a QP1, o estudo reportará uma matriz de decisão com quatro células:
+chave correta, chave errada, abstenção correta e abstenção errada. Dela saem a
+cobertura (fração de pares respondidos), a precisão nos pares respondidos, a
+revocação nos pares que têm chave e a taxa de falsa aceitação nos pares
+negativos. O estudo também reportará a \emph{cobertura de candidatos}: a
+fração de pares cuja chave aparece na ordenação do estágio de evidências, que
+separa erro de evidência de erro de decisão.
+
+\section{Questões de pesquisa e condições}
+\label{sec:metodologia-condicoes}
+
+O sistema completo, chamado \emph{S}, será comparado com cinco
+\emph{baselines} (Tabela~\ref{tab:condicoes}). Cada \emph{baseline} com LLM
+remove uma parte de S, de modo que a diferença entre eles isola o efeito
+dessa parte.
+
+\begin{table}[htbp]
+\centering
+\caption{Condições da QP1. Todas são avaliadas pelo mesmo \emph{harness}; B0
+e B1 apenas no acerto de chave, porque não produzem transformação}
+\label{tab:condicoes}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.32\textwidth}@{}}
+\toprule
+& \textbf{Condição} & \textbf{O que responde} \\
+\midrule
+B0 & Similaridade de nomes & Piso \\
+B1 & Valentine: COMA e um \emph{matcher} baseado em valores; a correspondência mais bem ranqueada vale como chave; limiar de abstenção calibrado no conjunto de desenvolvimento & O sistema supera o \emph{matching} clássico? \\
+B2 & Regras com busca exaustiva limitada no catálogo & O que o LLM acrescenta às regras? \\
+B3 & LLM com esquema e amostras, sem as evidências do estágio 1 & As evidências ajudam o LLM? \\
+B4 & LLM escreve o SQL da junção, executado num DuckDB só de leitura & Manter o SQL determinístico ajuda? \\
+S & Sistema completo & Referência para B0--B4 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{B3} mantém a assinatura, o catálogo, o modelo e o nível de contexto de
+domínio de S, mas recebe só o esquema e amostras. É a condição mais próxima do
+\emph{schema matching} com LLM \cite{parciak2024schema}, mas ainda precisa
+responder dentro do catálogo. \textbf{B4} recebe as mesmas entradas de S e
+devolve SQL em vez de um dicionário de mapeamento, o que remove o catálogo e o
+estágio de renderização. B4 será comparado sem a verificação de S; uma análise
+secundária acrescenta a verificação, exceto a checagem da cardinalidade
+declarada. S, B3 e B4 usarão o mesmo modelo, a mesma temperatura, o mesmo
+número de execuções (cinco por par) e o mesmo limite de autocorreção, e o
+consumo real de \emph{tokens} de cada condição será reportado, incluindo as
+tentativas que falharam.
+
+\textbf{B2} será o \emph{pipeline} só de regras planejado. Usa as evidências
+do estágio 1, com os defeitos encontrados no protótipo corrigidos (por
+exemplo, \emph{scores} de conteúdo calculados sobre as colunas inteiras e não
+sobre as cem primeiras linhas), um limiar de abstenção calibrado no conjunto
+de desenvolvimento e uma busca exaustiva limitada sobre as operações do
+catálogo disponíveis em cada nível de contexto. B2 e S rodarão em três níveis
+de contexto de domínio (sem contexto, Glossário, Glossário + Mapa de Fluxo),
+o que forma uma ablação $2 \times 3$ do LLM e do contexto. Sem o Mapa de
+Fluxo, a operação \emph{extrair identificador(tipo)} não existe; o efeito
+medido do Mapa combina, portanto, o conhecimento de domínio com a
+disponibilidade dessa operação.
+
+As questões de pesquisa são:
+
+\begin{description}
+\item[QP1 (acurácia)] Com que acurácia o sistema encontra chaves, por tipo de
+atrito, em comparação com as condições da Tabela~\ref{tab:condicoes}?
+\item[QP2 (modelos)] Um modelo de pesos abertos em hardware próprio alcança um
+modelo proprietário na condição S, considerando acurácia, \emph{tokens} e
+latência? Para órgãos públicos, a hospedagem própria pode apoiar a soberania
+tecnológica, mantendo dados governamentais e a execução do modelo em
+infraestrutura que o Estado controla.
+\item[QP3 (analistas)] O sistema torna analistas mais rápidos e mais
+certeiros?
+\item[QP4 (novos pares no MinC)] Em pares de fontes do MinC que o Gov Hub
+ainda não integra, quantas chaves e abstenções propostas são confirmadas por
+quem conhece as bases?
+\item[QP5 (processo)] Construir o sistema por SDD permite que um agente de IA
+de código o construa e estenda com qualidade verificável, medida como
+correção, autonomia e custo?
+\end{description}
+
+\section{Dados e benchmark}
 \label{sec:metodologia-ground-truth}
-% Seleção de 20 a 40 pares, três níveis de dificuldade, rótulo por categoria de atrito, pares negativos, congelamento antes de ajustar o agente.
 
-\section{Protocolo de avaliação}
+O benchmark terá duas partes, e as duas incluem pares negativos.
+
+\begin{description}
+\item[Pares reais] de 12 a 20 das 29 condições de junção entre fontes
+encontradas no código de produção do Gov Hub
+(Seção~\ref{sec:estudodecaso-inventario}). O gabarito é derivado do SQL de
+produção, documentado pela autora e auditado numa amostra por um engenheiro
+do Gov Hub. O SQL de produção pode conter erros e omitir chaves alternativas
+corretas; as divergências encontradas na auditoria serão registradas, e os
+pares não resolvidos, excluídos.
+\item[Pares perturbados] cerca de 120 pares (de 15 a 20 por tipo de atrito)
+gerados a partir de tabelas-semente públicas. Cada um aplica exatamente um
+atrito à chave, com semente fixa. Pares negativos que removem a chave são
+acrescentados. Uma perturbação de texto livre embute identificadores em
+descrições modeladas a partir de textos do conjunto de desenvolvimento, com
+padrões congelados antes. Um subconjunto exploratório de 15 a 20 pares
+combinará atritos observados em junções de produção e será reportado à
+parte.
+\end{description}
+
+Cada par perturbado também rodará com os nomes de coluna anonimizados
+(\texttt{col\_7}), para medir a dependência dos nomes e a contaminação pelo
+pré-treino. Pares com identificadores pessoais (CPF) como chave ficam fora, e
+só os gabaritos são versionados, nunca os dados.
+
+\textbf{Divisão sem vazamento.} Cerca de um quinto dos pares formará um
+conjunto de desenvolvimento, livre para ajustes. Ele é pequeno para que a
+maior parte dos pares fique para teste. O restante formará o conjunto de
+teste, executado uma única vez. A divisão será feita por tabela-semente e
+por par de fontes antes da perturbação, de modo que todas as variantes de uma
+semente e todas as junções reais entre as mesmas duas fontes caiam do mesmo
+lado. Pares reais usados durante a prototipação vão para o conjunto de
+desenvolvimento. O conjunto de teste, o catálogo, o Mapa de Fluxo e o limiar
+de execução serão congelados antes de qualquer ajuste.
+
+\section{Protocolo da QP3}
+\label{sec:metodologia-protocolo-qp3}
+
+Dois ou três analistas do Gov Hub (nunca a autora, e sem acesso aos
+gabaritos) resolverão, cada um, de seis a oito pares reais do conjunto de
+teste: metade sem ajuda e metade revisando a saída do sistema. A atribuição
+será cruzada e balanceada entre analistas, para controlar a dificuldade do
+par e o aprendizado, com limite de 60 minutos por par. As medidas são o tempo
+até declarar a chave e a transformação e o acerto de chave e de execução. Com
+essa amostra, a QP3 é um estudo piloto, reportado por par e por analista.
+
+\section{Protocolo da QP4: aplicação ao MinC}
+\label{sec:metodologia-protocolo-qp4}
+
+A QP4 é o estudo de caso propriamente dito. O sistema congelado será
+aplicado a pares de fontes ingeridas pelo repositório
+\texttt{data-application-minc} que ainda não são cruzadas
+(Seção~\ref{sec:estudodecaso-minc}). Para cada par, o sistema devolve uma
+chave validada ou uma abstenção. Cada resposta será revisada por quem conhece
+as bases (equipe do Gov Hub no MinC) e classificada como chave confirmada,
+chave rejeitada, abstenção confirmada ou abstenção contestada. Não há
+gabarito prévio para esses pares; o resultado é reportado como contagem e
+como relato dos atritos encontrados.
+
+As chaves confirmadas serão entregues ao repositório do MinC como
+\emph{models} dbt gerados pelo estágio determinístico, por \emph{pull
+request}, seguindo as convenções de camadas do repositório. Os achados de
+interoperabilidade (pares sem chave comum, atritos novos, problemas que só
+aparecem ao executar a junção) alimentam a discussão do TCC~2 e a
+documentação do Gov Hub.
+
+\section{Protocolo da QP5}
 \label{sec:metodologia-protocolo-de-avaliacao}
-% Tabela QP x experimento x métricas x baseline; 3 a 5 execuções por par com LLM; registro das specs para a QP5.
+
+Registrar apenas que, com especificação, o agente cumpriu a especificação não
+mede o efeito do SDD: o agente vê os critérios e escreve os próprios testes,
+e não há referência do que ele faria sem especificação. Por isso, em seis a
+oito incrementos:
+
+\begin{enumerate}
+\item a autora escreve a especificação e uma suíte de testes-oráculo antes de
+qualquer implementação, e mantém os oráculos fora do espaço de trabalho do
+agente;
+\item cada incremento é implementado duas vezes a partir do mesmo
+\emph{commit}, em \emph{worktrees} separados e em ordem sorteada, com o mesmo
+agente e a mesma versão de modelo;
+\item o \emph{braço com especificação} recebe a especificação completa; o
+outro braço recebe só o enunciado do problema e um contrato mínimo de
+invocação e saída, igual nos dois braços; apenas o braço com especificação
+recebe os critérios de aceite;
+\item são permitidas até $K$ intervenções padronizadas, que descrevem o
+comportamento observado sem dicas de implementação, registradas literalmente.
+\end{enumerate}
+
+Os oráculos exercitam o comportamento pela linha de comando ou pelo dbt e
+formam dois grupos, reportados separadamente. Os \emph{oráculos comuns}
+derivam só do enunciado e do contrato mínimo, que os dois braços recebem. Os
+\emph{oráculos de critério} derivam dos critérios de aceite. As instruções do
+repositório que pedem especificação antes do código ficam neutras nos dois
+braços, e as ADRs ficam visíveis para ambos. O estudo mede, assim, o efeito
+da especificação completa além da interface, e não o do formato SDD em si. Os
+oráculos comuns dão a comparação que não favorece nenhum dos braços.
+
+As medidas são os oráculos que passam na primeira entrega e ao final, as
+intervenções, os \emph{tokens} e o tempo da autora, incluindo o tempo de
+escrever a especificação. Os resultados serão reportados por incremento, com
+a mediana da diferença pareada entre incrementos para cada medida. Com seis a
+oito pares, eles não sustentam generalização. Apenas o braço com
+especificação entra no repositório.
+
+\section{Análise e reprodutibilidade}
+\label{sec:metodologia-analise}
+
+A versão do modelo e a temperatura serão fixadas, e cada condição com LLM
+rodará cinco vezes por par. O resultado por par é a fração de execuções
+corretas. Estão previstas cinco comparações: S $\times$ B1 no acerto de
+chave; S $\times$ B2, B3 e B4 no acerto de execução, todas no nível
+Glossário + Mapa de Fluxo; e S aberto $\times$ S proprietário no acerto de
+execução, no mesmo nível. Elas usarão intervalos de confiança de 95\% por
+\emph{bootstrap} pareado com 10~mil reamostragens
+\cite{efron1993bootstrap}, o teste de McNemar sobre o voto da maioria por par
+\cite{mcnemar1947} e a correção de Holm \cite{holm1979}. Os resultados por
+tipo de atrito serão descritivos, com intervalos de Wilson \cite{wilson1927}.
+\emph{Prompts}, respostas, \emph{tokens}, latência, \emph{snapshots} e o
+hardware usado para o modelo local serão registrados.
 
 \section{Ameaças à validade}
 \label{sec:metodologia-ameacas-a-validade}
-% Interna, externa, de constructo e de conclusão (Wohlin et al., 2012).
+
+As ameaças seguem a classificação de \citeonline{wohlin2012experimentation}.
+
+\textbf{Interna.} A autora constrói o sistema, anota os pares reais, escreve o
+Mapa de Fluxo, leu o SQL de produção e conduz os dois braços da QP5. As
+mitigações são os protocolos congelados, a auditoria externa dos gabaritos,
+uma fonte pública citada para cada formato de identificador no Mapa de Fluxo,
+padrões de extração derivados desses formatos e não do SQL de produção, e
+testes-oráculo escondidos do agente. Os oráculos de critério derivam da
+especificação avaliada e podem favorecer o braço com especificação; por isso
+os oráculos comuns são reportados à parte.
+
+\textbf{Externa.} O domínio é o orçamento federal e as junções de uma única
+plataforma. Os pares perturbados podem não refletir os atritos reais, e por
+isso os pares reais são reportados separadamente. Generalizar para outro
+domínio exige outro Mapa de Fluxo.
+
+\textbf{De constructo.} O acerto de execução aproxima, mas não mede, a
+utilidade para o analista; só a QP3 a mede diretamente, e em escala piloto.
+Na QP4, a confirmação depende do julgamento de quem conhece as bases.
+
+\textbf{De conclusão.} Há poucos pares reais, poucos analistas e de seis a
+oito incrementos na QP5. Os resultados por tipo de atrito são exploratórios.
 
 \section{Cronograma}
 \label{sec:metodologia-cronograma}
-% Fases até a defesa do TCC 2 (agosto de 2027); portões: ground truth congelado, resultados congelados.
+
+A Tabela~\ref{tab:cronograma} mostra as fases até a defesa do TCC~2. Os dois
+portões, conjunto de teste congelado e resultados congelados, protegem a
+avaliação: ajustar o sistema depois de ver o conjunto de teste faria a
+avaliação medir o próprio ajuste.
+
+\begin{table}[htbp]
+\centering
+\caption{Cronograma}
+\label{tab:cronograma}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.28\textwidth}>{\raggedright\arraybackslash}X l@{}}
+\toprule
+\textbf{Fase} & \textbf{Entregas} & \textbf{Prazo} \\
+\midrule
+1. Escopo e referencial & Questões de pesquisa, revisão da literatura, texto do TCC~1 & mar./2027 (defesa do TCC~1) \\
+2. Benchmark e \emph{baselines} & Pares reais com \emph{snapshots}, gerador de pares perturbados, divisão, \emph{harness}, \emph{baselines}, Mapa de Fluxo & abr./2027 \\
+\multicolumn{2}{@{}l}{\emph{Portão: conjunto de teste, catálogo e Mapa de Fluxo congelados}} & fim de abr./2027 \\
+3. Experimentos & QP1 com ablação, QP2, QP3, aplicação ao MinC (QP4) & maio--jun./2027 \\
+\multicolumn{2}{@{}l}{\emph{Portão: resultados congelados}} & fim de jun./2027 \\
+4. Escrita e defesa & Capítulos de resultados e discussão, \emph{pull requests} ao MinC, revisão & ago./2027 (defesa do TCC~2) \\
+\midrule
+Contínuo & Incrementos do sistema por SDD e registros da QP5 & nov./2026--jun./2027 \\
+\bottomrule
+\end{tabularx}
+\end{table}

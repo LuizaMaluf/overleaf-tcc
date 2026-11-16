@@ -1,0 +1,161 @@
+% Capítulo — TCC 1
+\chapter{Estudo de caso e resultados preliminares}
+\label{chap:estudodecaso}
+
+Este capítulo descreve o contexto em que o sistema é avaliado: o Gov Hub, o
+levantamento das junções entre fontes no código de produção e o repositório
+do Ministério da Cultura, onde o sistema será aplicado. Termina com o estado
+atual da implementação e os primeiros resultados.
+
+\section{Gov Hub}
+\label{sec:estudodecaso-govhub}
+
+O Gov Hub é uma plataforma de dados de código aberto desenvolvida pelo Lab
+Livre, laboratório de engenharia de software da UnB, com ministérios do
+governo federal. Cada ministério tem um repositório
+\texttt{data-application-*} na organização GovHub-br. A plataforma ingere
+fontes federais como SIAFI, Transferegov, Compras.gov, SICONV, SALIC e IBGE
+num PostgreSQL, com orquestração pelo Airflow, e mantém as junções entre elas
+como \emph{models} dbt em produção.
+
+\section{Inventário das junções entre fontes}
+\label{sec:estudodecaso-inventario}
+
+Para delimitar o problema, a autora leu o código dos repositórios do Gov Hub e
+listou 29 condições de junção entre fontes diferentes no código de produção,
+contando separadamente as chaves alternativas que uma junção tenta em
+sequência. A cascata de dezesseis passos que extrai o número do TED de campos
+de texto livre conta como uma condição. Uma delas está num \emph{model}
+desativado e outra no código de ingestão. A Tabela~\ref{tab:inventario}
+agrupa as condições por tipo de atrito. A classificação foi feita pela
+autora, por leitura estática, e será auditada e congelada antes da avaliação.
+
+\begin{table}[htbp]
+\centering
+\caption{Atritos nas 29 condições de junção entre fontes do código de produção
+do Gov Hub (uma junção pode ter vários tipos; a junção sem transformação também
+é contada em grafia)}
+\label{tab:inventario}
+\footnotesize
+\begin{tabular}{@{}lrl@{}}
+\toprule
+\textbf{Atrito} & \textbf{Junções} & \textbf{Exemplo} \\
+\midrule
+Formato ou tipo & 15 & NE curta $\times$ identificador completo \\
+Chave derivada & 9 & UG + gestão + NE $\rightarrow$ identificador SIAFI \\
+Grafia ou nomenclatura & 5 & nomes de parlamentares, acentos \\
+Extração de texto livre & 4 & número da transferência na descrição \\
+Equivalência de código & 3 & a mesma unidade sob duas siglas \\
+Estrutura aninhada & 1 & identificador dentro de JSON bruto \\
+\midrule
+Sem transformação & 1 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Apenas uma junção é uma igualdade direta entre colunas sem transformação. Ao
+menos seis chaves são compostas, várias junções usam cascatas de
+alternativas, e duas usam o CPF, um identificador pessoal, e ficam fora do
+estudo. A única junção com estrutura aninhada é uma dessas duas, de modo que
+esse atrito aparece apenas nos pares perturbados.
+
+O inventário também mostra por que o catálogo e o Mapa de Fluxo são
+necessários. A decomposição do identificador SIAFI (os seis primeiros
+caracteres são a UG, os doze últimos são o documento) aparece em pelo menos
+cinco \emph{models} e é a chave derivada mais frequente do domínio. As
+junções que tiram a chave de texto livre (o número do TED na descrição da
+nota de empenho, o número do convênio no texto da NE) só são reconhecíveis
+por quem conhece o fluxo orçamentário.
+
+\section{O repositório do Ministério da Cultura}
+\label{sec:estudodecaso-minc}
+
+O repositório \texttt{data-application-minc} mantém o \emph{pipeline} de
+dados do MinC no Gov Hub. Ele ingere o Transferegov, o BB Gestão Ágil, o
+SALIC, a Ancine, o SICONFI, o Banco Central, o Mapas Culturais e as bases do
+IBGE (SIDRA, MUNIC e a base territorial FCU),
+transforma os dados com o dbt em PostgreSQL e serve o acompanhamento das
+metas da PNAB e da Lei Paulo Gustavo. O trabalho é financiado pelo TED n.º
+01/2026/SGE/SE/MinC.
+
+\subsection{Junções entre fontes no MinC}
+
+Um levantamento estático no \emph{commit} \texttt{c588691} (10 de novembro de
+2026), que percorre a linhagem de cada um dos \emph{models} dbt até as suas
+fontes, encontrou apenas três \emph{models} que cruzam fontes diferentes:
+
+\begin{itemize}
+\item a junção das planilhas de contemplados do relatório de gestão com o
+território do IBGE, por uma chave derivada de nome do município sem acento e
+sigla da UF;
+\item duas junções entre Ancine, BB Gestão Ágil, SALIC e as planilhas de
+contemplados pelo documento do beneficiário, que pode ser CPF.
+\end{itemize}
+
+Só a primeira pode entrar no benchmark; as outras usam um identificador
+pessoal. O restante dos cruzamentos do repositório acontece dentro de uma
+mesma fonte, como o SALIC com o SALIC ou as edições da MUNIC entre si.
+% TODO: auditar este levantamento (feito por script, em 15/11/2026) e
+% registrar o script no repositório do sistema.
+
+\subsection{Pares ainda não integrados}
+
+O MinC tem, portanto, poucas junções em produção e várias fontes que
+descrevem as mesmas entidades sem estar cruzadas. É nesse espaço que o
+sistema pode gerar valor para o ministério: descobrir novos pares de
+integração, testar a metodologia fora do benchmark e entregar os cruzamentos
+confirmados como \emph{models}. São candidatos iniciais à QP4:
+
+\begin{itemize}
+\item Ancine $\times$ SALIC: a planilha da Ancine tem uma coluna com o número
+SALIC do projeto, que corresponde ao PRONAC do SALIC;
+\item SALIC $\times$ Transferegov e FCU: o SALIC usa o código IBGE do
+município com seis dígitos, e as outras fontes, com sete; a ponte entre os
+dois formatos existe numa tabela do próprio SALIC;
+\item SICONFI e IBGE SIDRA $\times$ território da FCU, pelo código do
+município.
+\end{itemize}
+
+A lista será revista com a equipe do Gov Hub no MinC antes do congelamento.
+Esses pares não têm gabarito prévio, e por isso entram na QP4 e não no
+benchmark da QP1.
+
+\section{Resultados preliminares}
+\label{sec:estudodecaso-preliminares}
+
+\subsection{Cobertura do catálogo}
+
+A autora conferiu, em 5 de novembro de 2026, cada uma das 29 condições contra
+o rascunho do catálogo, por leitura estática do SQL. Catorze cabem em no
+máximo três operações por lado; quatro precisam de \emph{extrair
+identificador(tipo)} em pelo menos uma etapa da cascata; três ficam fora do
+benchmark; e oito dependem de definições de operações ainda não congeladas.
+Como o rascunho do catálogo saiu deste mesmo inventário, essa contagem
+descreve o encaixe, não a generalização: os pares reais vão testar a escolha
+da chave, não a cobertura do catálogo.
+
+\subsection{Ilustração do protótipo}
+
+Num par de desenvolvimento com bases do IBGE, o caminho só de regras do
+protótipo (que não é o \emph{baseline} B2) escolheu \texttt{nome}
+$\leftrightarrow$ \texttt{nome}. A chave correta é o código da UF, que é o
+prefixo do código do município e também aparece aninhado num JSON: uma chave
+derivada que a similaridade de nomes não encontra. O caso ilustra o problema;
+não é evidência a favor do sistema proposto.
+
+\subsection{Primeiro incremento por SDD}
+
+Um incremento de delimitação do repositório, fora do protocolo pareado, foi
+especificado com oito critérios de aceite e implementado por um agente de
+código em duas iterações, sem intervenções. A especificação foi alterada duas
+vezes depois de aprovada. A verificação encontrou uma divergência entre a
+especificação e o código: a especificação supunha que o \emph{linter} já
+passava, mas havia 78 erros. A divergência só apareceu quando os comandos de
+verificação dos critérios foram executados, que é o papel que os
+testes-oráculo escondidos assumem no protocolo pareado.
+
+\subsection{Estado da implementação}
+
+Existem a coleta de evidências e um caminho de decisão sem LLM. A chamada de
+decisão tipada, a abstenção, o catálogo, o achatamento de JSON aninhado e a
+renderização dbt ainda serão construídos, cada um como um incremento por SDD.

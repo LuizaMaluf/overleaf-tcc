@@ -2,16 +2,124 @@
 \chapter{Trabalhos relacionados}
 \label{chap:trabalhosrelacionados}
 
-% Abertura do capítulo: um parágrafo dizendo o que ele apresenta.
+Este capítulo situa o trabalho em quatro linhas: \emph{schema matching},
+transformações para junção, LLMs com autoridade limitada e
+\emph{Spec-Driven Development}. Termina com um quadro comparativo e a lacuna
+que o trabalho ocupa.
 
 \section{Critérios de busca e seleção}
 \label{sec:trabalhosrelacionados-criterios-de-busca-e-selecao}
-% Bases consultadas, strings de busca, critérios de inclusão e exclusão.
 
-\section{Abordagens de matching}
+Os trabalhos foram reunidos a partir das referências do artigo-base, de
+buscas nos anais do VLDB, ICDE, ICSE e CAIN e no arXiv, e por bola de neve a
+partir dos trabalhos encontrados. Foram incluídos trabalhos que (i) descobrem
+correspondências ou chaves entre tabelas, (ii) sintetizam transformações
+para junção, (iii) restringem ou verificam a saída de um LLM dentro de um
+sistema, ou (iv) avaliam agentes de IA de código guiados por especificação.
+% TODO: registrar strings de busca, datas e número de resultados por base.
+
+\section{\emph{Schema matching}}
 \label{sec:trabalhosrelacionados-abordagens-de-matching}
-% Clássicas (Cupid, Similarity Flooding, Valentine) e com LLM.
+
+Os \emph{matchers} clássicos alinham atributos usando nomes, instâncias e
+restrições \cite{rahm2001survey}. O COMA combina vários deles
+\cite{do2002coma}, e o Valentine compara métodos clássicos num benchmark de
+descoberta de dados \cite{koutras2021valentine}. Modelos de fundação executam
+tarefas de preparação de dados com pouco treinamento específico
+\cite{narayan2022wrangle}, e o \emph{schema matching} com LLMs já foi avaliado
+experimentalmente \cite{parciak2024schema}.
+
+Todos esses trabalhos devolvem correspondências. O problema aqui é a
+possibilidade de junção sob transformações verificáveis: a resposta precisa
+dizer como transformar cada lado, com operações de um catálogo fechado, e a
+junção executada a verifica. Como vários atritos (máscaras, identificadores
+embutidos, aninhamento) só aparecem nos valores, as evidências precisam
+incluir o perfil dos valores, não apenas os nomes.
+
+\section{Transformações para junção}
+\label{sec:trabalhosrelacionados-transformacoes}
+
+O FlashFill \cite{gulwani2011flashfill} e o Transform-Data-by-Example
+\cite{he2018tde} sintetizam transformações a partir de exemplos de entrada e
+saída, que um par novo de tabelas não tem. O Auto-Join \cite{zhu2017autojoin}
+dispensa exemplos e busca transformações sintáticas que tornem duas tabelas
+unificáveis. O cenário deste trabalho acrescenta equivalências de código e
+identificadores em texto livre irregular, que exigem conhecimento de domínio,
+e exige o resultado num catálogo fechado, com abstenção explícita. Em vez de
+replicar o Auto-Join, o \emph{baseline} só de regras do estudo faz uma busca
+exaustiva limitada no mesmo catálogo que o LLM usa
+(Seção~\ref{sec:metodologia-condicoes}).
+
+O QJoin \cite{wang2025qjoin} busca, por aprendizado por reforço, uma
+biblioteca fechada de operadores de transformação para descobrir tabelas
+unificáveis, sem LLM. O MetaJoin \cite{wang2026metajoin}, versão seguinte do
+mesmo trabalho, usa um LLM como controlador que escolhe entre especialistas
+de junção e verifica a saída deles. Nenhum dos dois trata a ausência de chave
+como uma saída prevista. A ferramenta de descoberta de relações atual do Gov
+Hub classifica as relações candidatas pela sobreposição de valores, mas deixa
+como sugestões as chaves que precisam de transformação. O sistema proposto
+atua nessa etapa.
+
+\section{LLMs com autoridade limitada}
+\label{sec:trabalhosrelacionados-llm-limitado}
+
+O SPAPI-Tester \cite{wang2025spapi} mapeia atributos entre especificações em
+silos com saídas tipadas de LLM e renderiza o código de teste a partir de
+\emph{templates}; este trabalho adota essa divisão para a integração de dados
+(Seção~\ref{sec:fundamentacao-artigo-base-spapi-tester}). O DSPy
+\cite{khattab2024dspy} fornece as assinaturas tipadas e a validação de saída
+que a chamada de decisão usa. Arquiteturas de referência para agentes
+baseados em modelos de fundação recomendam salvaguardas explícitas
+\cite{lu2024refarch}, e há propostas para tornar verificável o uso de
+ferramentas por agentes \cite{doshi2026safetool}. A decomposição da tarefa,
+com o LLM apenas nas etapas que precisam dele, aparece como padrão de projeto
+\cite{marquez2025patterns}, e um estudo de sistemas reais mostrou que a
+integração de LLMs em software é frequentemente feita de forma incorreta
+\cite{shao2025integration}.
+
+\section{\emph{Spec-Driven Development}}
+\label{sec:trabalhosrelacionados-sdd}
+
+O Spec Kit \cite{speckit} organiza o trabalho do agente em especificar,
+planejar, dividir em tarefas e implementar. \citeonline{agarwal2026sdd}
+compararam o SDD como prescrito e como praticado e relatam comportamento mais
+confiável do agente, com custo maior de planejamento e revisão.
+\citeonline{taghavi2026speckitagents} ancoraram as etapas do Spec Kit em
+evidências do repositório e obtiveram um ganho pequeno na qualidade avaliada
+por um LLM. O SWE-bench \cite{jimenez2024swebench} avalia agentes com testes
+escondidos deles. Não encontramos uma comparação pareada do trabalho de um
+agente com e sem especificação que use testes desse tipo; a QP5 faz essa
+comparação nos incrementos do próprio sistema.
 
 \section{Comparativo e lacuna}
 \label{sec:trabalhosrelacionados-comparativo-e-lacuna}
-% Tabela comparativa; a lacuna que o TCC preenche.
+
+A Tabela~\ref{tab:comparativo} compara as abordagens nos aspectos que
+importam para o problema. O diferencial deste trabalho não é um
+\emph{matcher} melhor. É reunir o que costuma aparecer separado: o LLM
+contribui com conhecimento de domínio, mas sem autoridade sobre a junção; a
+transformação vem de um catálogo fechado; a abstenção é uma resposta
+avaliada; e o processo que constrói o sistema é ele mesmo limitado e
+avaliado.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparação com os trabalhos relacionados}
+\label{tab:comparativo}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X cccccc@{}}
+\toprule
+\textbf{Abordagem} & \rotatebox{90}{\textbf{Transformação}} & \rotatebox{90}{\textbf{Usa valores}} & \rotatebox{90}{\textbf{Usa LLM}} & \rotatebox{90}{\textbf{Abstenção}} & \rotatebox{90}{\textbf{Valida executando}} & \rotatebox{90}{\textbf{Processo avaliado}} \\
+\midrule
+\emph{Matchers} clássicos (COMA, Valentine) & --- & parcial & --- & --- & --- & --- \\
+\emph{Schema matching} com LLM \cite{parciak2024schema} & --- & sim & sim & --- & --- & --- \\
+FlashFill, TDE (por exemplos) & sim & sim & --- & --- & --- & --- \\
+Auto-Join & sim & sim & --- & --- & sim & --- \\
+QJoin & sim & sim & --- & --- & sim & --- \\
+MetaJoin & sim & sim & sim & --- & sim & --- \\
+SPAPI-Tester (outro domínio) & sim & --- & sim & --- & sim & --- \\
+\textbf{Este trabalho} & \textbf{sim} & \textbf{sim} & \textbf{sim} & \textbf{sim} & \textbf{sim} & \textbf{sim} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+% TODO: conferir cada célula contra os artigos antes da entrega.
